@@ -1,0 +1,56 @@
+version: "3.9"
+services:
+  oracle:
+    image: tososomaru/oracle19c:1.0.0
+    container_name: oracle19c-jira
+    environment:
+      - ORACLE_SID=ORCLCDB
+      - ORACLE_PDB=test
+      - ORACLE_PWD=admin
+    ports:
+      - 8080:8080
+      - 1521:1521
+      - 5500:5500
+    volumes:
+      - oracle-data:/u01/app/oracle
+      - ./oracle:/docker-entrypoint-initdb.d
+    networks:
+      - jiranet
+    hostname: oracle
+  
+  jira:
+    depends_on: 
+      - oracle
+    build: ./jira
+    container_name: jira-oracle
+
+    hostname: jirasoftware
+    volumes:
+      - jiradata:/var/atlassian/jira
+      - jiralogs:/opt/atlassian/jira/logs
+    environment:
+      - VIRTUAL_HOST=localhost
+      - CATALINA_OPTS=-Xms2024m -Xmx2048m -Datlassian.plugins.enable.wait=300
+      - ATL_JDBC_URL=jdbc:oracle:thin:@oracle:1521:ORCLCDB
+      - ATL_DB_DRIVER=oracle.jdbc.OracleDriver
+      - ATL_DB_TYPE=oracle19c
+      - ATL_JDBC_USER=jiradbuser
+      - ATL_JDBC_PASSWORD=admin
+    ports:
+      - "9080:8080"
+    networks:
+      - jiranet
+    links:
+      - 'oracle:oracle'
+
+volumes:
+  jiradata:
+    external: false
+  jiralogs:
+    external: false
+  oracle-data:
+    external: false
+
+networks:
+  jiranet:
+    driver: bridge

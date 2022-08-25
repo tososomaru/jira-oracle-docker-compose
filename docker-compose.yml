@@ -1,6 +1,13 @@
 version: "3.9"
+
+x-base: &base-config
+  networks:
+    - jiranet
+
 services:
+
   oracle:
+    <<: *base-config
     image: tososomaru/oracle19c:1.0.0
     container_name: oracle19c-jira
     environment:
@@ -12,18 +19,28 @@ services:
       - 1521:1521
       - 5500:5500
     volumes:
-      - oracle-data:/u01/app/oracle
-      - ./oracle:/docker-entrypoint-initdb.d
-    networks:
-      - jiranet
+      - ./oracle:/opt/oracle/scripts/startup
+      - oracle-data:/opt/oracle/product
     hostname: oracle
+    healthcheck:
+      test: [ "CMD", "/opt/oracle/checkDBStatus.sh >/dev/null || exit 1"]
+      interval: 2m
+      start_period: 5m
+      timeout: 30s
+      retries: 15
   
   jira:
+    <<: *base-config
     depends_on: 
-      - oracle
+      oracle:
+        condition: service_healthy
+
     build: ./jira
     container_name: jira-oracle
-
+    deploy:
+      restart_policy:
+        condition: on-failure
+        max_attempts: 3
     hostname: jirasoftware
     volumes:
       - jiradata:/var/atlassian/jira
@@ -32,14 +49,12 @@ services:
       - VIRTUAL_HOST=localhost
       - CATALINA_OPTS=-Xms2024m -Xmx2048m -Datlassian.plugins.enable.wait=300
       - ATL_JDBC_URL=jdbc:oracle:thin:@oracle:1521:ORCLCDB
-      - ATL_DB_DRIVER=oracle.jdbc.OracleDriver
-      - ATL_DB_TYPE=oracle19c
       - ATL_JDBC_USER=jiradbuser
-      - ATL_JDBC_PASSWORD=admin
+      - ATL_JDBC_PASSWORD=jiradbpassword
+      - ATL_DB_DRIVER=oracle.jdbc.OracleDriver
+      - ATL_DB_TYPE=oracle10g
     ports:
       - "9080:8080"
-    networks:
-      - jiranet
     links:
       - 'oracle:oracle'
 
